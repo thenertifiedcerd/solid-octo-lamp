@@ -66,7 +66,6 @@ const DecorativeElements = () => (
 
 const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, terminateSession }) => {
   
-  // Format seconds to HH:MM:SS
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
     const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -77,7 +76,7 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
   return (
     <div className="animate-in fade-in duration-500 min-h-[600px]">
       
-      {/* VIOLATION ALERT (Only shows when user slacks off) */}
+      {/* VIOLATION ALERT */}
       <div className={`mb-12 text-center transition-all duration-300 ${isSlacking ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden m-0'}`}>
         <div className="inline-flex items-center gap-2 px-4 py-1 text-warden font-grotesk text-xs tracking-widest punishment-glow mb-4">
           <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
@@ -94,7 +93,6 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
       {/* TIMER & CONTROLS */}
       <div className={`flex flex-col items-center justify-center space-y-12 ${!isSlacking ? 'mt-12' : ''}`}>
         <div className={`relative w-full aspect-square max-w-[400px] flex items-center justify-center border bg-surface transition-colors duration-300 ${isSlacking ? 'border-warden' : 'border-outline'}`}>
-          {/* Active Pulse Ring */}
           {isArmed && (
              <div className={`absolute inset-4 border-2 animate-pulse ${isSlacking ? 'border-warden punishment-glow opacity-30' : 'border-primary opacity-10'}`} />
           )}
@@ -109,7 +107,6 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
         </div>
         
         <div className="w-full flex flex-col gap-4">
-          {/* Dynamic Action Button */}
           {!isArmed ? (
             <button 
               onClick={() => setIsArmed(true)}
@@ -247,16 +244,19 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('session');
   
   // App Core State
-  const [isArmed, setIsArmed] = useState(false);
+  const[isArmed, setIsArmed] = useState(false);
   const [isSlacking, setIsSlacking] = useState(false);
-  const[sessionTime, setSessionTime] = useState(0);
-  const [logs, setLogs] = useState([]);
+  const [sessionTime, setSessionTime] = useState(0);
+  const[logs, setLogs] = useState([]);
+
+  // Reference to our custom audio element
+  const alarmAudioRef = useRef(null);
 
   // Use refs so event listeners always have the latest state values
   const isArmedRef = useRef(isArmed);
   const isSlackingRef = useRef(isSlacking);
   
-  useEffect(() => { isArmedRef.current = isArmed; },[isArmed]);
+  useEffect(() => { isArmedRef.current = isArmed; }, [isArmed]);
   useEffect(() => { isSlackingRef.current = isSlacking; }, [isSlacking]);
 
   // Utility to generate timestamp
@@ -316,47 +316,23 @@ export default function App() {
     };
   },[]);
 
-  // 3. Audio Alarm Logic (Web Audio API)
+  // 3. Audio Alarm Logic (Custom File)
   useEffect(() => {
-    let interval;
-    let audioCtx;
+    const audioEl = alarmAudioRef.current;
+    if (!audioEl) return;
 
     if (isSlacking) {
-      // Setup audio engine
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AudioContext();
-
-      // Creates a harsh, digital buzzing beep
-      const playBeep = () => {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime); 
-        osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
-
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
-      };
-
-      playBeep(); // Trigger immediately
-      interval = setInterval(playBeep, 1000); // Repeat every second until focus returns
+      // Reset to beginning in case it was paused midway
+      audioEl.currentTime = 0; 
+      // Play the audio
+      audioEl.play().catch(error => {
+        console.log("Browser blocked auto-play:", error);
+      });
+    } else {
+      // Pause when focus returns or system disarmed
+      audioEl.pause();
     }
-
-    return () => {
-      if (interval) clearInterval(interval);
-      if (audioCtx) audioCtx.close().catch(console.error);
-    };
-  }, [isSlacking]);
+  },[isSlacking]);
 
   const handleTerminate = () => {
     setIsArmed(false);
@@ -389,6 +365,19 @@ export default function App() {
 
       <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />
       <DecorativeElements />
+
+      {/* 
+        YOUR CUSTOM AUDIO FILE: 
+        Ensure 'alarm.mp3' (or your chosen name) is inside your public/ folder 
+        'loop' ensures it keeps ringing until they return.
+      */}
+      <audio 
+        ref={alarmAudioRef} 
+        src="/chicken-on-tree-screaming.mp3" 
+        preload="auto" 
+        loop
+        className="hidden" 
+      />
     </div>
   );
 }
