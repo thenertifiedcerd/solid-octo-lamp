@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Focus Warden</title>
+    
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom CSS & Tailwind Config -->
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .punishment-glow {
+        box-shadow: 0px 0px 25px rgba(189, 0, 255, 0.6);
+        border: 1px solid #BD00FF;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              background: '#000000',
+              surface: '#0A0A0A',
+              'surface-container': '#121414',
+              outline: '#1F1F1F',
+              primary: '#FFFFFF',
+              warden: '#BD00FF',
+              'on-surface-muted': '#4A4A4A',
+            },
+            fontFamily: {
+              grotesk: ['Space Grotesk', 'sans-serif'],
+              inter: ['Inter', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-background text-primary font-inter selection:bg-warden selection:text-background overflow-x-hidden min-h-screen flex flex-col">
+    <div id="root"></div>
+    <!-- THIS LINE IS REQUIRED FOR VITE TO LOAD REACT -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
