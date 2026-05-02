@@ -59,7 +59,7 @@ const WardenHUD = ({ isSlacking }) => (
   <div className={`fixed inset-0 pointer-events-none border transition-colors duration-200 z-[100] ${isSlacking ? 'border-warden shadow-[inset_0px_0px_30px_rgba(189,0,255,0.4)]' : 'border-transparent'}`} />
 );
 
-const TopAppBar = ({ activeTab, setActiveTab }) => {
+const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout }) => {
   const tabs = ['session', 'dashboard', 'leaderboard'];
   return (
     <header className="bg-background text-primary font-grotesk uppercase tracking-widest text-sm fixed top-0 border-b border-outline flex justify-between items-center w-full px-6 py-4 z-50">
@@ -78,6 +78,24 @@ const TopAppBar = ({ activeTab, setActiveTab }) => {
         </span>
       </nav>
       <div className="flex items-center gap-4">
+        {currentUser && (
+          <div className="flex items-center gap-3 pl-4 border-l border-outline">
+            <div className="text-right text-off-white">
+              <div className="font-inter text-[11px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">Operative</div>
+              <div className="font-grotesk text-[12px] font-bold">{currentUser.username}</div>
+              <div className={`font-inter text-[9px] uppercase tracking-[0.1em] ${currentUser.role === 'admin' ? 'text-warden' : 'text-primary'}`}>
+                {currentUser.role}
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              className="ml-2 p-2 hover:bg-outline/30 transition-colors"
+              title="Logout"
+            >
+              <span className="material-symbols-outlined text-sm">logout</span>
+            </button>
+          </div>
+        )}
         <span className="material-symbols-outlined hover:text-warden cursor-pointer transition-colors" title="Security">security</span>
         <span className="material-symbols-outlined hover:text-warden cursor-pointer transition-colors" title="Settings">settings</span>
       </div>
@@ -115,9 +133,102 @@ const DecorativeElements = () => (
   </>
 );
 
+// --- LOGIN VIEW ---
+const LoginView = ({ onLogin }) => {
+  const [username, setUsername] = useState('');
+  const [selectedRole, setSelectedRole] = useState('user');
+
+  const handleLogin = () => {
+    if (username.trim()) {
+      onLogin(username, selectedRole);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
+      <div className="w-full max-w-[500px] mx-auto px-6">
+        <div className="text-center mb-12">
+          <h1 className="font-grotesk text-[48px] font-bold tracking-[-0.02em] text-primary uppercase mb-4">
+            THE WARDEN
+          </h1>
+          <p className="font-inter text-[14px] text-on-surface-muted uppercase tracking-widest">
+            Authentication Protocol
+          </p>
+        </div>
+
+        <div className="space-y-6 bg-surface border border-outline p-8">
+          {/* Username Input */}
+          <div className="space-y-2">
+            <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted">
+              Operative ID
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              placeholder="Enter your operative ID"
+              className="w-full px-4 py-3 bg-background border border-outline text-primary font-inter text-[14px] placeholder-on-surface-muted focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          {/* Role Selection */}
+          <div className="space-y-3">
+            <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted block">
+              Access Level
+            </label>
+            <div className="space-y-2">
+              {[
+                { id: 'admin', label: 'Admin', description: 'Full system control' },
+                { id: 'user', label: 'User', description: 'Limited access' },
+              ].map((role) => (
+                <button
+                  key={role.id}
+                  onClick={() => setSelectedRole(role.id)}
+                  className={`w-full p-4 border-2 text-left transition-all ${
+                    selectedRole === role.id
+                      ? 'border-warden bg-warden/10'
+                      : 'border-outline hover:border-primary'
+                  }`}
+                >
+                  <div className="font-grotesk font-bold uppercase text-primary">{role.label}</div>
+                  <div className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mt-1">
+                    {role.description}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Login Button */}
+          <button
+            onClick={handleLogin}
+            disabled={!username.trim()}
+            className={`w-full py-4 font-grotesk text-[16px] font-bold uppercase tracking-[0.05em] transition-all ${
+              username.trim()
+                ? selectedRole === 'admin'
+                  ? 'bg-warden text-background punishment-glow hover:scale-[0.98] active:scale-95'
+                  : 'bg-primary text-background hover:scale-[0.98] active:scale-95'
+                : 'bg-outline text-on-surface-muted cursor-not-allowed opacity-50'
+            }`}
+          >
+            AUTHENTICATE
+          </button>
+        </div>
+
+        <div className="text-center mt-8">
+          <p className="font-inter text-[11px] text-on-surface-muted uppercase tracking-widest opacity-50">
+            Use demo credentials: any username, select role
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- TAB VIEWS ---
 
-const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, terminateSession }) => {
+const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, terminateSession, currentUser }) => {
   
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -125,6 +236,9 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
     const s = (totalSeconds % 60).toString().padStart(2, '0');
     return `${h}:${m}:${s}`;
   };
+
+  const isAdmin = currentUser?.role === 'admin';
+  const canDisarm = isAdmin;
 
   return (
     <div className="animate-in fade-in duration-500 min-h-[600px]">
@@ -170,9 +284,13 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
             </button>
           ) : (
             <button 
-              onClick={() => setIsArmed(false)}
-              className={`w-full py-6 bg-transparent border-2 font-grotesk text-[24px] font-bold leading-[1.2] uppercase tracking-[0.05em] hover:scale-[0.98] active:scale-95 transition-all ${isSlacking ? 'border-warden text-warden punishment-glow' : 'border-primary text-primary'}`}>
-              DISARM SYSTEM
+              onClick={() => canDisarm && setIsArmed(false)}
+              disabled={!canDisarm}
+              title={!canDisarm ? 'Only admin can disarm the system' : ''}
+              className={`w-full py-6 bg-transparent border-2 font-grotesk text-[24px] font-bold leading-[1.2] uppercase tracking-[0.05em] hover:scale-[0.98] active:scale-95 transition-all ${
+                isSlacking ? 'border-warden text-warden punishment-glow' : 'border-primary text-primary'
+              } ${!canDisarm ? 'opacity-50 cursor-not-allowed hover:scale-100 active:scale-100' : ''}`}>
+              {canDisarm ? 'DISARM SYSTEM' : 'ADMIN ONLY - LOCKED'}
             </button>
           )}
 
@@ -181,6 +299,13 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
           </button>
         </div>
       </div>
+
+      {/* ADMIN NOTICE */}
+      {!isAdmin && isArmed && (
+        <div className="mt-8 p-4 bg-warden/10 border border-warden text-warden font-inter text-[12px] uppercase tracking-widest text-center">
+          ⚠️ Only administrators can disarm this system while armed
+        </div>
+      )}
 
       {/* METRICS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-20">
@@ -297,6 +422,7 @@ const LeaderboardView = () => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('session');
+  const [currentUser, setCurrentUser] = useState(null);
   
   // App Core State
   const[isArmed, setIsArmed] = useState(false);
@@ -313,6 +439,22 @@ export default function App() {
   
   useEffect(() => { isArmedRef.current = isArmed; }, [isArmed]);
   useEffect(() => { isSlackingRef.current = isSlacking; }, [isSlacking]);
+
+  // Handle login
+  const handleLogin = (username, role) => {
+    setCurrentUser({ username, role });
+    addLog(`${role.toUpperCase()} LOGIN: ${username}`, 'Auth', true);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    const prevUser = currentUser.username;
+    setCurrentUser(null);
+    setIsArmed(false);
+    setIsSlacking(false);
+    setSessionTime(0);
+    addLog(`LOGOUT: ${prevUser}`, 'Auth', true);
+  };
 
   // Utility to generate timestamp
   const getTimestamp = () => {
@@ -396,12 +538,17 @@ export default function App() {
     setLogs([]);
   };
 
+  // Show login screen if not authenticated
+  if (!currentUser) {
+    return <LoginView onLogin={handleLogin} />;
+  }
+
   return (
     <div className="relative flex flex-col min-h-screen">
       {/* Dynamic HUD Glow */}
       <WardenHUD isSlacking={isSlacking} />
       
-      <TopAppBar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <TopAppBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
 
       <main className="flex-grow w-full max-w-[800px] mx-auto px-6 pt-32 pb-32 z-10">
         {activeTab === 'session' && (
@@ -412,6 +559,7 @@ export default function App() {
             sessionTime={sessionTime}
             logs={logs}
             terminateSession={handleTerminate}
+            currentUser={currentUser}
           />
         )}
         {activeTab === 'dashboard' && <DashboardView />}
