@@ -1,5 +1,58 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// --- EVADING MESSAGE COMPONENT ---
+const EvadingMessage = ({ children }) => {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const messageRef = useRef(null);
+  const evasionDistance = 100; // Distance at which message starts to evade
+  const evasionStrength = 15; // How far the message moves
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!messageRef.current) return;
+
+      const rect = messageRef.current.getBoundingClientRect();
+      const messageCenterX = rect.left + rect.width / 2;
+      const messageCenterY = rect.top + rect.height / 2;
+
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      const distX = messageCenterX - mouseX;
+      const distY = messageCenterY - mouseY;
+      const distance = Math.sqrt(distX * distX + distY * distY);
+
+      if (distance < evasionDistance && distance > 0) {
+        // Calculate angle and apply evasion
+        const angle = Math.atan2(distY, distX);
+        const evasionAmount = (1 - distance / evasionDistance) * evasionStrength;
+        
+        setOffset({
+          x: Math.cos(angle) * evasionAmount,
+          y: Math.sin(angle) * evasionAmount,
+        });
+      } else {
+        setOffset({ x: 0, y: 0 });
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  return (
+    <div
+      ref={messageRef}
+      style={{
+        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        transition: 'transform 50ms ease-out',
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 // --- SHARED COMPONENTS ---
 
 const WardenHUD = ({ isSlacking }) => (
@@ -82,9 +135,11 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
           <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
           FOCUS BREACH DETECTED
         </div>
-        <h1 className="font-grotesk text-[48px] font-bold leading-[1.1] tracking-[-0.02em] text-warden uppercase mb-2">
-          SLACKING OFF
-        </h1>
+        <EvadingMessage>
+          <h1 className="font-grotesk text-[48px] font-bold leading-[1.1] tracking-[-0.02em] text-warden uppercase mb-2">
+            SLACKING OFF
+          </h1>
+        </EvadingMessage>
         <p className="font-inter text-[16px] text-warden opacity-80 uppercase tracking-widest leading-[1.6]">
           Immediate correction required
         </p>
