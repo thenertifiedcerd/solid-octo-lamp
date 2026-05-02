@@ -372,46 +372,177 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
   );
 };
 
-const DashboardView = () => (
-  <div className="flex flex-col items-center justify-center text-center mt-32 space-y-6">
-    <span className="material-symbols-outlined text-[80px] text-outline mb-4">analytics</span>
-    <h2 className="font-grotesk text-[32px] text-primary uppercase tracking-widest">Surveillance Dashboard</h2>
-    <p className="font-inter text-[16px] text-on-surface-muted uppercase tracking-widest max-w-md leading-relaxed">
-      Data aggregation currently offline. Maintain focus to generate analytics.
-    </p>
-  </div>
-);
+const DashboardView = ({ sessionTime, logs, isArmed, currentUser }) => {
+  const infractions = logs.filter(log => !log.isSafe).length;
+  const totalEvents = logs.length;
+  const focusViolations = logs.filter(log => log.event === 'Focus Lost').length;
+  const efficiencyScore = Math.max(0, 100 - (infractions * 5));
+  
+  const formatSessionTime = (totalSeconds) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
 
-const LeaderboardView = () => {
-  const users =[
-    { rank: '01', name: 'SYS_ADMIN_01', score: '99.9%' },
-    { rank: '02', name: 'OPERATIVE_44', score: '98.2%' },
-    { rank: '03', name: 'USER_8921', score: '94.5%' },
-    { rank: '04', name: 'GUEST_009', score: '81.1%', isThreat: true },
-  ];
   return (
-    <div className="mt-10">
-      <div className="text-center mb-12 text-on-surface-muted">
-         <span className="material-symbols-outlined text-[48px] mb-4">military_tech</span>
-         <h2 className="font-grotesk text-[32px] text-primary uppercase tracking-widest">Global Efficiency</h2>
+    <div className="animate-in fade-in duration-500">
+      <div className="text-center mb-12">
+        <span className="material-symbols-outlined text-[48px] mb-4 text-primary">analytics</span>
+        <h2 className="font-grotesk text-[32px] text-primary uppercase tracking-widest">Session Analytics</h2>
+        <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mt-2">Real-time Operation Data</p>
       </div>
+
+      {/* STATS GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-surface border border-outline p-6 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">Session Duration</span>
+            <span className="material-symbols-outlined text-primary">schedule</span>
+          </div>
+          <div className="font-grotesk text-[32px] font-bold text-primary">{formatSessionTime(sessionTime)}</div>
+          <div className="text-[11px] text-on-surface-muted uppercase tracking-widest">Current Session Active</div>
+        </div>
+
+        <div className="bg-surface border border-outline p-6 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">Efficiency Score</span>
+            <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>grade</span>
+          </div>
+          <div className={`font-grotesk text-[32px] font-bold ${efficiencyScore > 80 ? 'text-primary' : efficiencyScore > 50 ? 'text-yellow-400' : 'text-warden'}`}>
+            {efficiencyScore}%
+          </div>
+          <div className="h-2 bg-outline w-full">
+            <div className={`h-full transition-all duration-300 ${efficiencyScore > 80 ? 'bg-primary' : efficiencyScore > 50 ? 'bg-yellow-400' : 'bg-warden'}`} style={{ width: `${efficiencyScore}%` }} />
+          </div>
+        </div>
+
+        <div className="bg-surface border border-outline p-6 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">Total Events</span>
+            <span className="material-symbols-outlined text-primary">history</span>
+          </div>
+          <div className="font-grotesk text-[32px] font-bold text-primary">{totalEvents}</div>
+          <div className="text-[11px] text-on-surface-muted uppercase tracking-widest">Logged Activities</div>
+        </div>
+
+        <div className="bg-surface border border-outline p-6 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">Infractions</span>
+            <span className="material-symbols-outlined text-warden" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+          </div>
+          <div className={`font-grotesk text-[32px] font-bold ${infractions > 0 ? 'text-warden punishment-glow' : 'text-primary'}`}>
+            {infractions}
+          </div>
+          <div className="text-[11px] text-on-surface-muted uppercase tracking-widest">Focus Violations</div>
+        </div>
+      </div>
+
+      {/* SYSTEM STATUS */}
+      <div className="bg-surface border border-outline p-6">
+        <div className="font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase mb-4">System Status</div>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-inter text-[14px] text-primary">Monitoring Status</span>
+            <span className={`font-grotesk font-bold uppercase text-[12px] ${isArmed ? 'text-green-400' : 'text-on-surface-muted'}`}>
+              {isArmed ? '● ACTIVE' : '● OFFLINE'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-outline">
+            <span className="font-inter text-[14px] text-primary">Current User</span>
+            <span className="font-grotesk font-bold text-primary">{currentUser?.username}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-outline">
+            <span className="font-inter text-[14px] text-primary">Access Level</span>
+            <span className={`font-grotesk font-bold uppercase text-[12px] ${currentUser?.role === 'admin' ? 'text-warden' : 'text-primary'}`}>
+              {currentUser?.role}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LeaderboardView = ({ sessionTime, logs, currentUser, isArmed }) => {
+  const infractions = logs.filter(log => !log.isSafe).length;
+  const userEfficiency = Math.max(0, 100 - (infractions * 5));
+  
+  const staticLeaderboard = [
+    { rank: '01', name: 'SYS_ADMIN_01', score: 99.9, status: 'elite' },
+    { rank: '02', name: 'OPERATIVE_44', score: 98.2, status: 'excellent' },
+    { rank: '03', name: 'USER_8921', score: 94.5, status: 'excellent' },
+    { rank: '04', name: currentUser?.username || 'CURRENT_OP', score: userEfficiency, status: userEfficiency > 80 ? 'excellent' : userEfficiency > 50 ? 'good' : 'poor', isCurrentUser: true },
+    { rank: '05', name: 'GUEST_009', score: 81.1, status: 'good' },
+  ];
+
+  const leaderboard = staticLeaderboard
+    .sort((a, b) => b.score - a.score)
+    .map((u, i) => ({ ...u, rank: String(i + 1).padStart(2, '0') }));
+
+  return (
+    <div className="animate-in fade-in duration-500">
+      <div className="text-center mb-12">
+        <span className="material-symbols-outlined text-[48px] mb-4 text-primary">military_tech</span>
+        <h2 className="font-grotesk text-[32px] text-primary uppercase tracking-widest">Global Efficiency Ranking</h2>
+        <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mt-2">Network-Wide Performance Index</p>
+      </div>
+
+      {/* LEADERBOARD */}
       <div className="border border-outline bg-surface overflow-hidden">
         <div className="p-4 border-b border-outline font-inter text-[14px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase bg-surface-container flex justify-between">
-          <span>Operative</span>
-          <span>Focus Index</span>
+          <span className="flex-1">Rank</span>
+          <span className="flex-1">Operative</span>
+          <span className="flex-1 text-right">Efficiency</span>
         </div>
         <div className="divide-y divide-outline">
-          {users.map((u, i) => (
-            <div key={i} className="p-4 flex justify-between items-center bg-background/40 hover:bg-outline/20 transition-colors">
-              <div className="flex items-center gap-4">
-                <span className="font-inter text-[14px] font-semibold text-on-surface-muted">{u.rank}</span>
-                <span className="font-inter text-[16px] text-primary uppercase tracking-widest">{u.name}</span>
+          {leaderboard.map((u, i) => {
+            const statusColor = 
+              u.status === 'elite' ? 'text-green-400' :
+              u.status === 'excellent' ? 'text-primary' :
+              u.status === 'good' ? 'text-yellow-400' :
+              'text-warden';
+            
+            return (
+              <div 
+                key={i} 
+                className={`p-4 flex justify-between items-center transition-all ${
+                  u.isCurrentUser 
+                    ? 'bg-primary/10 border-l-2 border-primary' 
+                    : 'bg-background/40 hover:bg-outline/20'
+                }`}
+              >
+                <div className="flex-1 flex items-center gap-3">
+                  <span className="font-grotesk text-[16px] font-bold text-on-surface-muted w-12">#{u.rank}</span>
+                  <div>
+                    <span className="font-inter text-[14px] font-semibold text-primary uppercase tracking-widest">{u.name}</span>
+                    {u.isCurrentUser && <div className="text-[10px] text-on-surface-muted mt-1">You</div>}
+                  </div>
+                </div>
+                <div className="flex-1 text-right">
+                  <span className={`font-grotesk text-[18px] font-bold ${statusColor}`}>
+                    {u.score.toFixed(1)}%
+                  </span>
+                  <div className="text-[10px] text-on-surface-muted mt-1 uppercase tracking-widest">
+                    {u.status}
+                  </div>
+                </div>
               </div>
-              <span className={`font-grotesk text-[18px] tracking-wider font-bold ${u.isThreat ? 'text-warden punishment-glow px-2 py-1' : 'text-primary'}`}>
-                {u.score}
-              </span>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* YOUR STATS */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-surface border border-primary/30 p-4">
+          <div className="font-inter text-[11px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase mb-2">Your Current Position</div>
+          <div className="font-grotesk text-[24px] font-bold text-primary">#{leaderboard.findIndex(u => u.isCurrentUser) + 1}</div>
+        </div>
+        <div className="bg-surface border border-primary/30 p-4">
+          <div className="font-inter text-[11px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase mb-2">Session Infractions</div>
+          <div className={`font-grotesk text-[24px] font-bold ${logs.filter(l => !l.isSafe).length > 0 ? 'text-warden' : 'text-primary'}`}>
+            {logs.filter(l => !l.isSafe).length}
+          </div>
         </div>
       </div>
     </div>
@@ -562,8 +693,8 @@ export default function App() {
             currentUser={currentUser}
           />
         )}
-        {activeTab === 'dashboard' && <DashboardView />}
-        {activeTab === 'leaderboard' && <LeaderboardView />}
+        {activeTab === 'dashboard' && <DashboardView sessionTime={sessionTime} logs={logs} isArmed={isArmed} currentUser={currentUser} />}
+        {activeTab === 'leaderboard' && <LeaderboardView sessionTime={sessionTime} logs={logs} currentUser={currentUser} isArmed={isArmed} />}
       </main>
 
       <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />
