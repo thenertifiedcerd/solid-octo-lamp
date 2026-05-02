@@ -176,13 +176,13 @@ const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout, currentSess
                 {currentUser.role}
               </div>
             </div>
-            {currentUser.role === 'admin' && !currentSession && (
+            {currentUser.role === 'admin' && (
               <button
-                onClick={onCreateSession}
+                onClick={currentSession ? () => setShowSessionCode(true) : onCreateSession}
                 className="ml-2 p-2 hover:bg-warden/20 hover:text-warden transition-colors"
-                title="Create Session"
+                title={currentSession ? 'View Session Code' : 'Create Session'}
               >
-                <span className="material-symbols-outlined text-sm">add_circle</span>
+                <span className="material-symbols-outlined text-sm">{currentSession ? 'share' : 'add_circle'}</span>
               </button>
             )}
             <button
