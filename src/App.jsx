@@ -128,7 +128,7 @@ const WardenHUD = ({ isSlacking }) => (
   <div className={`fixed inset-0 pointer-events-none border transition-colors duration-200 z-[100] ${isSlacking ? 'border-warden shadow-[inset_0px_0px_30px_rgba(189,0,255,0.4)]' : 'border-transparent'}`} />
 );
 
-const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout, currentSession, onCreateSession }) => {
+const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout, currentSession, onCreateSession, onShowSessionCode }) => {
   const tabs = ['session', 'dashboard', 'leaderboard'];
   return (
     <header className="bg-background text-primary font-grotesk uppercase tracking-widest text-sm fixed top-0 border-b border-outline flex justify-between items-center w-full px-6 py-4 z-50">
@@ -143,6 +143,15 @@ const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout, currentSess
               <div className="text-on-surface-muted uppercase tracking-[0.05em]">Session</div>
               <div className="text-primary font-bold">{currentSession.id}</div>
             </div>
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={onShowSessionCode}
+                className="ml-2 p-2 hover:bg-primary/20 hover:text-primary transition-colors"
+                title="Share Session Code"
+              >
+                <span className="material-symbols-outlined text-sm">share</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -776,6 +785,7 @@ export default function App() {
   const [currentSession, setCurrentSession] = useState(null);
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [newlyCreatedSession, setNewlyCreatedSession] = useState(null);
+  const [showSessionCode, setShowSessionCode] = useState(false);
   
   // App Core State
   const[isArmed, setIsArmed] = useState(false);
@@ -827,6 +837,7 @@ export default function App() {
     setCurrentSession(null);
     setNewlyCreatedSession(null);
     setShowCreateSession(false);
+    setShowSessionCode(false);
     setIsArmed(false);
     setIsSlacking(false);
     setSessionTime(0);
@@ -951,6 +962,52 @@ export default function App() {
     );
   }
 
+  // Show session code modal
+  if (showSessionCode && currentSession) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
+        <div className="w-full max-w-[500px] mx-auto px-6 text-center">
+          <h2 className="font-grotesk text-[32px] font-bold text-primary uppercase mb-4">Share Session</h2>
+          <div className="bg-surface border-2 border-primary p-8 space-y-6">
+            <div>
+              <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mb-2">Session Code</p>
+              <div className="font-grotesk text-[48px] font-bold text-warden punishment-glow tracking-widest">
+                {currentSession.id}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest">Participants</p>
+              <div className="flex flex-wrap gap-2">
+                {currentSession.participants.map((p, i) => (
+                  <div key={i} className="px-2 py-1 bg-background border border-outline text-primary font-inter text-[10px] font-semibold">
+                    {p}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(currentSession.id);
+                  alert('Session code copied to clipboard!');
+                }}
+                className="w-full py-3 bg-primary text-background font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+              >
+                Copy Code
+              </button>
+              <button
+                onClick={() => setShowSessionCode(false)}
+                className="w-full py-3 border border-outline text-primary font-grotesk text-[14px] font-bold uppercase hover:bg-outline/20 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex flex-col min-h-screen">
       {/* Dynamic HUD Glow */}
@@ -963,6 +1020,7 @@ export default function App() {
         onLogout={handleLogout}
         currentSession={currentSession}
         onCreateSession={() => setShowCreateSession(true)}
+        onShowSessionCode={() => setShowSessionCode(true)}
       />
 
       <main className="flex-grow w-full max-w-[800px] mx-auto px-6 pt-32 pb-32 z-10">
