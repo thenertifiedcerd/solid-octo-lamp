@@ -775,6 +775,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [newlyCreatedSession, setNewlyCreatedSession] = useState(null);
   
   // App Core State
   const[isArmed, setIsArmed] = useState(false);
@@ -814,8 +815,8 @@ export default function App() {
   const handleCreateSession = () => {
     if (currentUser?.role !== 'admin') return;
     const newSession = Database.createSession(currentUser.username);
-    setCurrentSession(newSession);
-    setShowCreateSession(false);
+    setNewlyCreatedSession(newSession);
+    setShowCreateSession(true);
     addLog(`SESSION CREATED: ${newSession.id}`, 'Session', true);
   };
 
@@ -824,6 +825,8 @@ export default function App() {
     const prevUser = currentUser.username;
     setCurrentUser(null);
     setCurrentSession(null);
+    setNewlyCreatedSession(null);
+    setShowCreateSession(false);
     setIsArmed(false);
     setIsSlacking(false);
     setSessionTime(0);
@@ -918,8 +921,7 @@ export default function App() {
   }
 
   // Session creation modal (admin only)
-  if (showCreateSession && currentUser.role === 'admin') {
-    const newSession = Database.createSession(currentUser.username);
+  if (showCreateSession && currentUser.role === 'admin' && newlyCreatedSession) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
         <div className="w-full max-w-[500px] mx-auto px-6 text-center">
@@ -928,7 +930,7 @@ export default function App() {
             <div>
               <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mb-2">Session Code</p>
               <div className="font-grotesk text-[48px] font-bold text-warden punishment-glow tracking-widest">
-                {newSession.id}
+                {newlyCreatedSession.id}
               </div>
             </div>
             <p className="font-inter text-[14px] text-primary uppercase">
@@ -936,7 +938,7 @@ export default function App() {
             </p>
             <button
               onClick={() => {
-                setCurrentSession(newSession);
+                setCurrentSession(newlyCreatedSession);
                 setShowCreateSession(false);
               }}
               className="w-full py-4 bg-primary text-background font-grotesk text-[16px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
