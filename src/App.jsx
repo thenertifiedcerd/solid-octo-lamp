@@ -240,6 +240,21 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Auto-fill from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlSessionCode = params.get('sessionCode');
+    const urlUsername = params.get('operativeId');
+    
+    if (urlSessionCode) {
+      setSessionCode(urlSessionCode);
+      setMode('joinSession');
+    }
+    if (urlUsername) {
+      setUsername(urlUsername);
+    }
+  }, []);
+
   const handleRegister = () => {
     setError('');
     setSuccess('');
@@ -933,6 +948,8 @@ export default function App() {
 
   // Session creation modal (admin only)
   if (showCreateSession && currentUser.role === 'admin' && newlyCreatedSession) {
+    const joinLink = `${window.location.origin}${window.location.pathname}?sessionCode=${newlyCreatedSession.id}`;
+    
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
         <div className="w-full max-w-[500px] mx-auto px-6 text-center">
@@ -945,17 +962,37 @@ export default function App() {
               </div>
             </div>
             <p className="font-inter text-[14px] text-primary uppercase">
-              Share this code with your team to join
+              Share this code or the join link with your team
             </p>
-            <button
-              onClick={() => {
-                setCurrentSession(newlyCreatedSession);
-                setShowCreateSession(false);
-              }}
-              className="w-full py-4 bg-primary text-background font-grotesk text-[16px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
-            >
-              Start Session
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(newlyCreatedSession.id);
+                  alert('Session code copied!');
+                }}
+                className="w-full py-3 bg-primary text-background font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+              >
+                Copy Code
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(joinLink);
+                  alert('Join link copied! Share this with your team.');
+                }}
+                className="w-full py-3 border-2 border-primary text-primary font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+              >
+                Copy Join Link
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentSession(newlyCreatedSession);
+                  setShowCreateSession(false);
+                }}
+                className="w-full py-3 border border-outline text-primary font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+              >
+                Start Session
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -964,6 +1001,8 @@ export default function App() {
 
   // Show session code modal
   if (showSessionCode && currentSession) {
+    const joinLink = `${window.location.origin}${window.location.pathname}?sessionCode=${currentSession.id}`;
+    
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
         <div className="w-full max-w-[500px] mx-auto px-6 text-center">
@@ -994,6 +1033,15 @@ export default function App() {
                 className="w-full py-3 bg-primary text-background font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
               >
                 Copy Code
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(joinLink);
+                  alert('Join link copied! Users can open it to auto-fill the session code.');
+                }}
+                className="w-full py-3 border-2 border-primary text-primary font-grotesk text-[14px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+              >
+                Copy Join Link
               </button>
               <button
                 onClick={() => setShowSessionCode(false)}
