@@ -352,7 +352,16 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
     }
     const result = await Database.joinSession(sessionCode.toUpperCase(), username);
     if (result.success) {
-      const user = await Database.getUserByUsername(username);
+      let user = await Database.getUserByUsername(username);
+      if (!user) {
+        setSuccess('No account found. Creating user profile...');
+        const registrationResult = await Database.registerUser(username, 'user');
+        if (!registrationResult.success) {
+          setError(registrationResult.message || 'Unable to create user profile');
+          return;
+        }
+        user = registrationResult.user;
+      }
       setSuccess('Joined session! Logging in...');
       setTimeout(() => onSessionJoin(username, user.role, sessionCode.toUpperCase()), 1500);
     } else {
