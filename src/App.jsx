@@ -1019,7 +1019,7 @@ export default function App() {
         currentUser={currentUser} 
         onLogout={handleLogout}
         currentSession={currentSession}
-        onCreateSession={() => setShowCreateSession(true)}
+        onCreateSession={handleCreateSession}
         onShowSessionCode={() => setShowSessionCode(true)}
       />
 
