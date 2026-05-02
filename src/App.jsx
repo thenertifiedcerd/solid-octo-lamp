@@ -1,5 +1,74 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// --- JSON DATABASE UTILITY ---
+const Database = {
+  // User management
+  getAllUsers: () => {
+    const users = localStorage.getItem('wardenUsers');
+    return users ? JSON.parse(users) : [];
+  },
+  
+  getUserByUsername: (username) => {
+    const users = Database.getAllUsers();
+    return users.find(u => u.username === username);
+  },
+  
+  registerUser: (username, role) => {
+    const users = Database.getAllUsers();
+    if (Database.getUserByUsername(username)) {
+      return { success: false, message: 'Username already exists' };
+    }
+    const newUser = { id: Date.now(), username, role, createdAt: new Date().toISOString() };
+    users.push(newUser);
+    localStorage.setItem('wardenUsers', JSON.stringify(users));
+    return { success: true, user: newUser };
+  },
+  
+  // Session management
+  getAllSessions: () => {
+    const sessions = localStorage.getItem('wardenSessions');
+    return sessions ? JSON.parse(sessions) : [];
+  },
+  
+  createSession: (adminUsername) => {
+    const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const sessions = Database.getAllSessions();
+    const newSession = {
+      id: sessionId,
+      adminUsername,
+      createdAt: new Date().toISOString(),
+      participants: [adminUsername],
+      isActive: true
+    };
+    sessions.push(newSession);
+    localStorage.setItem('wardenSessions', JSON.stringify(sessions));
+    return newSession;
+  },
+  
+  getSessionById: (sessionId) => {
+    const sessions = Database.getAllSessions();
+    return sessions.find(s => s.id === sessionId);
+  },
+  
+  joinSession: (sessionId, username) => {
+    const sessions = Database.getAllSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) {
+      return { success: false, message: 'Session not found' };
+    }
+    if (!session.participants.includes(username)) {
+      session.participants.push(username);
+      localStorage.setItem('wardenSessions', JSON.stringify(sessions));
+    }
+    return { success: true, session };
+  },
+  
+  getSessionByUsername: (username) => {
+    const sessions = Database.getAllSessions();
+    return sessions.find(s => s.participants.includes(username) && s.isActive);
+  }
+};
+
 // --- EVADING MESSAGE COMPONENT ---
 const EvadingMessage = ({ children }) => {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -59,12 +128,23 @@ const WardenHUD = ({ isSlacking }) => (
   <div className={`fixed inset-0 pointer-events-none border transition-colors duration-200 z-[100] ${isSlacking ? 'border-warden shadow-[inset_0px_0px_30px_rgba(189,0,255,0.4)]' : 'border-transparent'}`} />
 );
 
-const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout }) => {
+const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout, currentSession, onCreateSession }) => {
   const tabs = ['session', 'dashboard', 'leaderboard'];
   return (
     <header className="bg-background text-primary font-grotesk uppercase tracking-widest text-sm fixed top-0 border-b border-outline flex justify-between items-center w-full px-6 py-4 z-50">
-      <div className="text-xl font-bold tracking-tighter text-primary uppercase">
-        THE WARDEN
+      <div className="flex items-center gap-4">
+        <div className="text-xl font-bold tracking-tighter text-primary uppercase">
+          THE WARDEN
+        </div>
+        {currentSession && (
+          <div className="hidden sm:flex items-center gap-2 pl-4 border-l border-outline">
+            <span className="material-symbols-outlined text-[16px]">group</span>
+            <div className="text-[11px] font-inter">
+              <div className="text-on-surface-muted uppercase tracking-[0.05em]">Session</div>
+              <div className="text-primary font-bold">{currentSession.id}</div>
+            </div>
+          </div>
+        )}
       </div>
       <nav className="hidden md:flex gap-8 items-center">
         {tabs.map((tab) => (
@@ -87,6 +167,15 @@ const TopAppBar = ({ activeTab, setActiveTab, currentUser, onLogout }) => {
                 {currentUser.role}
               </div>
             </div>
+            {currentUser.role === 'admin' && !currentSession && (
+              <button
+                onClick={onCreateSession}
+                className="ml-2 p-2 hover:bg-warden/20 hover:text-warden transition-colors"
+                title="Create Session"
+              >
+                <span className="material-symbols-outlined text-sm">add_circle</span>
+              </button>
+            )}
             <button
               onClick={onLogout}
               className="ml-2 p-2 hover:bg-outline/30 transition-colors"
@@ -133,93 +222,206 @@ const DecorativeElements = () => (
   </>
 );
 
-// --- LOGIN VIEW ---
-const LoginView = ({ onLogin }) => {
+// --- LOGIN & SESSION VIEW ---
+const AuthView = ({ onLogin, onSessionJoin }) => {
+  const [mode, setMode] = useState('login'); // 'login', 'register', 'joinSession'
   const [username, setUsername] = useState('');
   const [selectedRole, setSelectedRole] = useState('user');
+  const [sessionCode, setSessionCode] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleRegister = () => {
+    setError('');
+    setSuccess('');
+    if (!username.trim()) {
+      setError('Username required');
+      return;
+    }
+    const result = Database.registerUser(username, selectedRole);
+    if (result.success) {
+      setSuccess('Registration successful! Now logging in...');
+      setTimeout(() => onLogin(username, selectedRole), 1500);
+    } else {
+      setError(result.message);
+    }
+  };
 
   const handleLogin = () => {
-    if (username.trim()) {
-      onLogin(username, selectedRole);
+    setError('');
+    if (!username.trim()) {
+      setError('Username required');
+      return;
+    }
+    const user = Database.getUserByUsername(username);
+    if (!user) {
+      setError('User not found. Please register first.');
+      return;
+    }
+    onLogin(username, user.role);
+  };
+
+  const handleJoinSession = () => {
+    setError('');
+    setSuccess('');
+    if (!username.trim()) {
+      setError('Username required');
+      return;
+    }
+    if (!sessionCode.trim()) {
+      setError('Session code required');
+      return;
+    }
+    const result = Database.joinSession(sessionCode.toUpperCase(), username);
+    if (result.success) {
+      const user = Database.getUserByUsername(username);
+      setSuccess('Joined session! Logging in...');
+      setTimeout(() => onSessionJoin(username, user.role, sessionCode.toUpperCase()), 1500);
+    } else {
+      setError(result.message);
     }
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
+    <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200] overflow-y-auto py-8">
       <div className="w-full max-w-[500px] mx-auto px-6">
         <div className="text-center mb-12">
           <h1 className="font-grotesk text-[48px] font-bold tracking-[-0.02em] text-primary uppercase mb-4">
             THE WARDEN
           </h1>
           <p className="font-inter text-[14px] text-on-surface-muted uppercase tracking-widest">
-            Authentication Protocol
+            {mode === 'login' ? 'Authentication' : mode === 'register' ? 'Create Account' : 'Join Session'}
           </p>
         </div>
 
         <div className="space-y-6 bg-surface border border-outline p-8">
-          {/* Username Input */}
-          <div className="space-y-2">
-            <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted">
-              Operative ID
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              placeholder="Enter your operative ID"
-              className="w-full px-4 py-3 bg-background border border-outline text-primary font-inter text-[14px] placeholder-on-surface-muted focus:border-primary focus:outline-none transition-colors"
-            />
+          {/* Mode Tabs */}
+          <div className="flex gap-2 mb-6">
+            {[
+              { id: 'login', label: 'Login' },
+              { id: 'register', label: 'Register' },
+              { id: 'joinSession', label: 'Join Session' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => { setMode(m.id); setError(''); setSuccess(''); }}
+                className={`flex-1 py-2 font-grotesk text-[12px] font-bold uppercase tracking-[0.05em] border transition-all ${
+                  mode === m.id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-outline text-on-surface-muted hover:border-primary'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
 
-          {/* Role Selection */}
-          <div className="space-y-3">
-            <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted block">
-              Access Level
-            </label>
-            <div className="space-y-2">
-              {[
-                { id: 'admin', label: 'Admin', description: 'Full system control' },
-                { id: 'user', label: 'User', description: 'Limited access' },
-              ].map((role) => (
-                <button
-                  key={role.id}
-                  onClick={() => setSelectedRole(role.id)}
-                  className={`w-full p-4 border-2 text-left transition-all ${
-                    selectedRole === role.id
-                      ? 'border-warden bg-warden/10'
-                      : 'border-outline hover:border-primary'
-                  }`}
-                >
-                  <div className="font-grotesk font-bold uppercase text-primary">{role.label}</div>
-                  <div className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mt-1">
-                    {role.description}
-                  </div>
-                </button>
-              ))}
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="p-3 bg-warden/20 border border-warden text-warden text-[12px] font-inter uppercase tracking-widest">
+              ⚠️ {error}
             </div>
-          </div>
+          )}
+          {success && (
+            <div className="p-3 bg-primary/20 border border-primary text-primary text-[12px] font-inter uppercase tracking-widest">
+              ✓ {success}
+            </div>
+          )}
 
-          {/* Login Button */}
+          {/* Username Input (for login and register) */}
+          {(mode === 'login' || mode === 'register') && (
+            <div className="space-y-2">
+              <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted">
+                Operative ID
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (mode === 'register' ? handleRegister() : handleLogin())}
+                placeholder="Enter username"
+                className="w-full px-4 py-3 bg-background border border-outline text-primary font-inter text-[14px] placeholder-on-surface-muted focus:border-primary focus:outline-none transition-colors"
+              />
+            </div>
+          )}
+
+          {/* Join Session Inputs */}
+          {mode === 'joinSession' && (
+            <>
+              <div className="space-y-2">
+                <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted">
+                  Operative ID
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Your username"
+                  className="w-full px-4 py-3 bg-background border border-outline text-primary font-inter text-[14px] placeholder-on-surface-muted focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted">
+                  Session Code
+                </label>
+                <input
+                  type="text"
+                  value={sessionCode}
+                  onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
+                  onKeyPress={(e) => e.key === 'Enter' && handleJoinSession()}
+                  placeholder="e.g., ABC123"
+                  maxLength="6"
+                  className="w-full px-4 py-3 bg-background border border-outline text-primary font-inter text-[14px] placeholder-on-surface-muted focus:border-primary focus:outline-none transition-colors uppercase"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Role Selection (for register only) */}
+          {mode === 'register' && (
+            <div className="space-y-3">
+              <label className="font-inter text-[12px] font-semibold uppercase tracking-[0.05em] text-on-surface-muted block">
+                Access Level
+              </label>
+              <div className="space-y-2">
+                {[
+                  { id: 'admin', label: 'Admin', description: 'Create & manage sessions' },
+                  { id: 'user', label: 'User', description: 'Join existing sessions' },
+                ].map((role) => (
+                  <button
+                    key={role.id}
+                    onClick={() => setSelectedRole(role.id)}
+                    className={`w-full p-4 border-2 text-left transition-all ${
+                      selectedRole === role.id
+                        ? 'border-warden bg-warden/10'
+                        : 'border-outline hover:border-primary'
+                    }`}
+                  >
+                    <div className="font-grotesk font-bold uppercase text-primary">{role.label}</div>
+                    <div className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mt-1">
+                      {role.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Button */}
           <button
-            onClick={handleLogin}
-            disabled={!username.trim()}
+            onClick={
+              mode === 'register' ? handleRegister :
+              mode === 'joinSession' ? handleJoinSession :
+              handleLogin
+            }
             className={`w-full py-4 font-grotesk text-[16px] font-bold uppercase tracking-[0.05em] transition-all ${
-              username.trim()
-                ? selectedRole === 'admin'
-                  ? 'bg-warden text-background punishment-glow hover:scale-[0.98] active:scale-95'
-                  : 'bg-primary text-background hover:scale-[0.98] active:scale-95'
+              (mode === 'register' || mode === 'joinSession' ? username.trim() && (mode === 'joinSession' ? sessionCode.trim() : true) : username.trim())
+                ? 'bg-primary text-background hover:scale-[0.98] active:scale-95'
                 : 'bg-outline text-on-surface-muted cursor-not-allowed opacity-50'
             }`}
           >
-            AUTHENTICATE
+            {mode === 'register' ? 'CREATE ACCOUNT' : mode === 'joinSession' ? 'JOIN SESSION' : 'LOGIN'}
           </button>
-        </div>
-
-        <div className="text-center mt-8">
-          <p className="font-inter text-[11px] text-on-surface-muted uppercase tracking-widest opacity-50">
-            Use demo credentials: any username, select role
-          </p>
         </div>
       </div>
     </div>
@@ -228,7 +430,7 @@ const LoginView = ({ onLogin }) => {
 
 // --- TAB VIEWS ---
 
-const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, terminateSession, currentUser }) => {
+const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, terminateSession, currentUser, currentSession }) => {
   
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -242,6 +444,23 @@ const SessionView = ({ isArmed, setIsArmed, isSlacking, sessionTime, logs, termi
 
   return (
     <div className="animate-in fade-in duration-500 min-h-[600px]">
+      
+      {/* SESSION PARTICIPANTS (if in session) */}
+      {currentSession && (
+        <div className="mb-6 p-4 bg-surface border border-primary/30 space-y-3">
+          <div className="flex items-center gap-2 font-inter text-[12px] font-semibold tracking-[0.05em] text-on-surface-muted uppercase">
+            <span className="material-symbols-outlined text-[16px]">group</span>
+            Session Participants ({currentSession.participants.length})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {currentSession.participants.map((participant, idx) => (
+              <div key={idx} className="px-3 py-1 bg-background border border-outline text-primary font-inter text-[11px] font-semibold uppercase">
+                {participant} {currentSession.adminUsername === participant && <span className="text-warden ml-1">👑</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* VIOLATION ALERT */}
       <div className={`mb-12 text-center transition-all duration-300 ${isSlacking ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden m-0'}`}>
@@ -554,6 +773,8 @@ const LeaderboardView = ({ sessionTime, logs, currentUser, isArmed }) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState('session');
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentSession, setCurrentSession] = useState(null);
+  const [showCreateSession, setShowCreateSession] = useState(false);
   
   // App Core State
   const[isArmed, setIsArmed] = useState(false);
@@ -574,13 +795,35 @@ export default function App() {
   // Handle login
   const handleLogin = (username, role) => {
     setCurrentUser({ username, role });
+    const session = Database.getSessionByUsername(username);
+    if (session) {
+      setCurrentSession(session);
+    }
     addLog(`${role.toUpperCase()} LOGIN: ${username}`, 'Auth', true);
+  };
+
+  // Handle session join
+  const handleSessionJoin = (username, role, sessionId) => {
+    setCurrentUser({ username, role });
+    const session = Database.getSessionById(sessionId);
+    setCurrentSession(session);
+    addLog(`JOINED SESSION: ${sessionId}`, 'Session', true);
+  };
+
+  // Create new session (admin only)
+  const handleCreateSession = () => {
+    if (currentUser?.role !== 'admin') return;
+    const newSession = Database.createSession(currentUser.username);
+    setCurrentSession(newSession);
+    setShowCreateSession(false);
+    addLog(`SESSION CREATED: ${newSession.id}`, 'Session', true);
   };
 
   // Handle logout
   const handleLogout = () => {
     const prevUser = currentUser.username;
     setCurrentUser(null);
+    setCurrentSession(null);
     setIsArmed(false);
     setIsSlacking(false);
     setSessionTime(0);
@@ -669,9 +912,41 @@ export default function App() {
     setLogs([]);
   };
 
-  // Show login screen if not authenticated
+  // Show auth screen if not authenticated
   if (!currentUser) {
-    return <LoginView onLogin={handleLogin} />;
+    return <AuthView onLogin={handleLogin} onSessionJoin={handleSessionJoin} />;
+  }
+
+  // Session creation modal (admin only)
+  if (showCreateSession && currentUser.role === 'admin') {
+    const newSession = Database.createSession(currentUser.username);
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background/95 z-[200]">
+        <div className="w-full max-w-[500px] mx-auto px-6 text-center">
+          <h2 className="font-grotesk text-[32px] font-bold text-primary uppercase mb-4">Session Created</h2>
+          <div className="bg-surface border-2 border-primary p-8 space-y-6">
+            <div>
+              <p className="font-inter text-[12px] text-on-surface-muted uppercase tracking-widest mb-2">Session Code</p>
+              <div className="font-grotesk text-[48px] font-bold text-warden punishment-glow tracking-widest">
+                {newSession.id}
+              </div>
+            </div>
+            <p className="font-inter text-[14px] text-primary uppercase">
+              Share this code with your team to join
+            </p>
+            <button
+              onClick={() => {
+                setCurrentSession(newSession);
+                setShowCreateSession(false);
+              }}
+              className="w-full py-4 bg-primary text-background font-grotesk text-[16px] font-bold uppercase hover:scale-[0.98] active:scale-95 transition-transform"
+            >
+              Start Session
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -679,7 +954,14 @@ export default function App() {
       {/* Dynamic HUD Glow */}
       <WardenHUD isSlacking={isSlacking} />
       
-      <TopAppBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
+      <TopAppBar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        currentUser={currentUser} 
+        onLogout={handleLogout}
+        currentSession={currentSession}
+        onCreateSession={() => setShowCreateSession(true)}
+      />
 
       <main className="flex-grow w-full max-w-[800px] mx-auto px-6 pt-32 pb-32 z-10">
         {activeTab === 'session' && (
@@ -691,10 +973,27 @@ export default function App() {
             logs={logs}
             terminateSession={handleTerminate}
             currentUser={currentUser}
+            currentSession={currentSession}
           />
         )}
-        {activeTab === 'dashboard' && <DashboardView sessionTime={sessionTime} logs={logs} isArmed={isArmed} currentUser={currentUser} />}
-        {activeTab === 'leaderboard' && <LeaderboardView sessionTime={sessionTime} logs={logs} currentUser={currentUser} isArmed={isArmed} />}
+        {activeTab === 'dashboard' && (
+          <DashboardView 
+            sessionTime={sessionTime} 
+            logs={logs} 
+            isArmed={isArmed} 
+            currentUser={currentUser}
+            currentSession={currentSession}
+          />
+        )}
+        {activeTab === 'leaderboard' && (
+          <LeaderboardView 
+            sessionTime={sessionTime} 
+            logs={logs} 
+            currentUser={currentUser} 
+            isArmed={isArmed}
+            currentSession={currentSession}
+          />
+        )}
       </main>
 
       <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />
