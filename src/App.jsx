@@ -1,72 +1,126 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { database, ref, set, get, onValue } from './firebase.js';
 
-// --- JSON DATABASE UTILITY ---
+// --- FIREBASE DATABASE UTILITY ---
 const Database = {
-  // User management
-  getAllUsers: () => {
-    const users = localStorage.getItem('wardenUsers');
-    return users ? JSON.parse(users) : [];
-  },
-  
-  getUserByUsername: (username) => {
-    const users = Database.getAllUsers();
-    return users.find(u => u.username === username);
-  },
-  
-  registerUser: (username, role) => {
-    const users = Database.getAllUsers();
-    if (Database.getUserByUsername(username)) {
-      return { success: false, message: 'Username already exists' };
+  getAllUsers: async () => {
+    try {
+      const snapshot = await get(ref(database, 'users'));
+      return snapshot.exists() ? Object.values(snapshot.val()) : [];
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
     }
-    const newUser = { id: Date.now(), username, role, createdAt: new Date().toISOString() };
-    users.push(newUser);
-    localStorage.setItem('wardenUsers', JSON.stringify(users));
-    return { success: true, user: newUser };
   },
-  
-  // Session management
-  getAllSessions: () => {
-    const sessions = localStorage.getItem('wardenSessions');
-    return sessions ? JSON.parse(sessions) : [];
-  },
-  
-  createSession: (adminUsername) => {
-    const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const sessions = Database.getAllSessions();
-    const newSession = {
-      id: sessionId,
-      adminUsername,
-      createdAt: new Date().toISOString(),
-      participants: [adminUsername],
-      isActive: true
-    };
-    sessions.push(newSession);
-    localStorage.setItem('wardenSessions', JSON.stringify(sessions));
-    return newSession;
-  },
-  
-  getSessionById: (sessionId) => {
-    const sessions = Database.getAllSessions();
-    return sessions.find(s => s.id === sessionId);
-  },
-  
-  joinSession: (sessionId, username) => {
-    const sessions = Database.getAllSessions();
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) {
-      return { success: false, message: 'Session not found' };
+
+  getUserByUsername: async (username) => {
+    try {
+      const snapshot = await get(ref(database, `users/${username}`));
+      return snapshot.exists() ? snapshot.val() : null;
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      return null;
     }
-    if (!session.participants.includes(username)) {
-      session.participants.push(username);
-      localStorage.setItem('wardenSessions', JSON.stringify(sessions));
-    }
-    return { success: true, session };
   },
-  
-  getSessionByUsername: (username) => {
-    const sessions = Database.getAllSessions();
-    return sessions.find(s => s.participants.includes(username) && s.isActive);
-  }
+
+  registerUser: async (username, role) => {
+    try {
+      const existing = await Database.getUserByUsername(username);
+      if (existing) {
+        return { success: false, message: 'Username already exists' };
+      }
+
+      const newUser = {
+        id: Date.now(),
+        username,
+        role,
+        createdAt: new Date().toISOString(),
+      };
+
+      await set(ref(database, `users/${username}`), newUser);
+      return { success: true, user: newUser };
+    } catch (error) {
+      console.error('Error registering user:', error);
+      return { success: false, message: 'Registration failed' };
+    }
+  },
+
+  getAllSessions: async () => {
+    try {
+      const snapshot = await get(ref(database, 'sessions'));
+      return snapshot.exists() ? Object.values(snapshot.val()) : [];
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      return [];
+    }
+  },
+
+  createSession: async (adminUsername) => {
+    try {
+      const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newSession = {
+        id: sessionId,
+        adminUsername,
+        createdAt: new Date().toISOString(),
+        participants: [adminUsername],
+        isActive: true,
+      };
+
+      await set(ref(database, `sessions/${sessionId}`), newSession);
+      return newSession;
+    } catch (error) {
+      console.error('Error creating session:', error);
+      return null;
+    }
+  },
+
+  getSessionById: async (sessionId) => {
+    try {
+      const snapshot = await get(ref(database, `sessions/${sessionId}`));
+      return snapshot.exists() ? snapshot.val() : null;
+    } catch (error) {
+      console.error('Error fetching session:', error);
+      return null;
+    }
+  },
+
+  joinSession: async (sessionId, username) => {
+    try {
+      const session = await Database.getSessionById(sessionId);
+      if (!session) {
+        return { success: false, message: 'Session not found' };
+      }
+
+      if (!session.participants.includes(username)) {
+        session.participants.push(username);
+        await set(ref(database, `sessions/${sessionId}`), session);
+      }
+
+      return { success: true, session };
+    } catch (error) {
+      console.error('Error joining session:', error);
+      return { success: false, message: 'Error joining session' };
+    }
+  },
+
+  getSessionByUsername: async (username) => {
+    try {
+      const sessions = await Database.getAllSessions();
+      return sessions.find((s) => s.participants.includes(username) && s.isActive) || null;
+    } catch (error) {
+      console.error('Error fetching session:', error);
+      return null;
+    }
+  },
+
+  watchSession: (sessionId, callback) => {
+    const sessionRef = ref(database, `sessions/${sessionId}`);
+    return onValue(sessionRef, (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.val());
+      }
+    });
+  },
 };
 
 // --- EVADING MESSAGE COMPONENT ---
@@ -255,14 +309,14 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
     }
   }, []);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setError('');
     setSuccess('');
     if (!username.trim()) {
       setError('Username required');
       return;
     }
-    const result = Database.registerUser(username, selectedRole);
+    const result = await Database.registerUser(username, selectedRole);
     if (result.success) {
       setSuccess('Registration successful! Now logging in...');
       setTimeout(() => onLogin(username, selectedRole), 1500);
@@ -271,13 +325,13 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('');
     if (!username.trim()) {
       setError('Username required');
       return;
     }
-    const user = Database.getUserByUsername(username);
+    const user = await Database.getUserByUsername(username);
     if (!user) {
       setError('User not found. Please register first.');
       return;
@@ -285,7 +339,7 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
     onLogin(username, user.role);
   };
 
-  const handleJoinSession = () => {
+  const handleJoinSession = async () => {
     setError('');
     setSuccess('');
     if (!username.trim()) {
@@ -296,9 +350,9 @@ const AuthView = ({ onLogin, onSessionJoin }) => {
       setError('Session code required');
       return;
     }
-    const result = Database.joinSession(sessionCode.toUpperCase(), username);
+    const result = await Database.joinSession(sessionCode.toUpperCase(), username);
     if (result.success) {
-      const user = Database.getUserByUsername(username);
+      const user = await Database.getUserByUsername(username);
       setSuccess('Joined session! Logging in...');
       setTimeout(() => onSessionJoin(username, user.role, sessionCode.toUpperCase()), 1500);
     } else {
@@ -818,10 +872,24 @@ export default function App() {
   useEffect(() => { isArmedRef.current = isArmed; }, [isArmed]);
   useEffect(() => { isSlackingRef.current = isSlacking; }, [isSlacking]);
 
+  useEffect(() => {
+    if (!currentSession?.id) return undefined;
+
+    const unsubscribe = Database.watchSession(currentSession.id, (updatedSession) => {
+      setCurrentSession(updatedSession);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [currentSession?.id]);
+
   // Handle login
-  const handleLogin = (username, role) => {
+  const handleLogin = async (username, role) => {
     setCurrentUser({ username, role });
-    const session = Database.getSessionByUsername(username);
+    const session = await Database.getSessionByUsername(username);
     if (session) {
       setCurrentSession(session);
     }
@@ -829,17 +897,26 @@ export default function App() {
   };
 
   // Handle session join
-  const handleSessionJoin = (username, role, sessionId) => {
+  const handleSessionJoin = async (username, role, sessionId) => {
     setCurrentUser({ username, role });
-    const session = Database.getSessionById(sessionId);
-    setCurrentSession(session);
-    addLog(`JOINED SESSION: ${sessionId}`, 'Session', true);
+    const result = await Database.joinSession(sessionId, username);
+    if (result.success) {
+      setCurrentSession(result.session);
+      addLog(`JOINED SESSION: ${sessionId}`, 'Session', true);
+    } else {
+      setCurrentUser(null);
+      alert(result.message);
+    }
   };
 
   // Create new session (admin only)
-  const handleCreateSession = () => {
+  const handleCreateSession = async () => {
     if (currentUser?.role !== 'admin') return;
-    const newSession = Database.createSession(currentUser.username);
+    const newSession = await Database.createSession(currentUser.username);
+    if (!newSession) {
+      alert('Could not create session. Check Firebase config and permissions.');
+      return;
+    }
     setNewlyCreatedSession(newSession);
     setShowCreateSession(true);
     addLog(`SESSION CREATED: ${newSession.id}`, 'Session', true);
